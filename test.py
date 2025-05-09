@@ -1,48 +1,3 @@
-# from kubernetes import client, config, utils
-
-
-# # Configs can be set in Configuration class directly or using helper utility
-# config.load_kube_config()
-# k8s_client = client.ApiClient()
-
-
-# def pod_fault_inject(service: str, action: str, duration: str, containerNames: list[str] = []) -> bool:
-#     """Inject a fault into a pod
-#     Args:
-#         service (str): The name of the service to inject the fault into, e.g., "adservice"
-#         action (str): The type of fault to inject, one of "pod-failure", "pod-kill", "container-kill"
-#             - pod-failure: Simulate a pod failure
-#             - pod-kill: Simulate a pod kill
-#             - container-kill: Simulate a container kill
-#         duration (str): The duration of the fault, e.g., "5m" for 5 minutes
-#         containerNames (list[str]): The names of the containers to inject the fault into, only used for "container-kill"
-#     Returns:
-#         bool: True if the injection was successful, False otherwise
-#     """
-#     dic = {'apiVersion': 'chaos-mesh.org/v1alpha1',
-#            'kind': 'PodChaos',
-#            'metadata': {'name': action, 'namespace': 'chaos-testing'},
-#            'spec': {'action': action,
-#                     'mode': 'one',
-#                     'duration': duration,
-#                     'selector': {'labelSelectors': {'app': service}},
-#                     }}
-#     if action == "container-kill":
-#         dic['spec']['containerNames'] = containerNames
-#     try:
-#         utils.create_from_dict(k8s_client, dic)
-#     except Exception as e:
-#         print(f"Failed to inject fault: {e}")
-#         return False
-
-#     print(
-#         f"Injected fault: {action} into service: {service} for duration: {duration}")
-#     return True
-
-
-# if __name__ == "__main__":
-#     pod_fault_inject("adservice", "pod-kill", "30s")
-
 import json
 from time import sleep
 import logging
@@ -52,8 +7,8 @@ from fault_inject import client
 from chaosmesh.client import Experiment
 from kube import get_service_pod_logs
 
-logging.getLogger("chaosmesh")
-# logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logger = logging.getLogger("chaosmesh")
+logger.setLevel(logging.DEBUG)
 
 
 def test(type: str, func: callable, **args) -> None:

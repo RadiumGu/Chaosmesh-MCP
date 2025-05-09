@@ -152,11 +152,6 @@ def _pod_fault_inject(service: str, type: str, **kwargs) -> dict:
         labelSelectors={"app": service}, pods=None, namespaces=['default'])
     kwargs['selector'] = selector
 
-    # with open("mcp-server.log", "a") as f:
-    #     f.write(
-    #         f"Injecting fault: {type} into service: {service} with arguments: {kwargs}\n")
-    #     f.flush()
-
     return _fault_inject(
         type=type,
         **kwargs,
