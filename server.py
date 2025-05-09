@@ -1,3 +1,4 @@
+import argparse
 import json
 from mcp.server.fastmcp import FastMCP
 import fault_inject
@@ -210,5 +211,14 @@ def all_services() -> list[dict]:
     return data
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Run the MCP with a specified transport.")
+    parser.add_argument('--transport', type=str, default='sse',
+                        help="Specify the transport type.")
+    args = parser.parse_args()
+    mcp.run(transport=args.transport)
+
+
 if __name__ == "__main__":
-    mcp.run(transport='sse')
+    main()
