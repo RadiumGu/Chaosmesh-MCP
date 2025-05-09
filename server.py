@@ -195,6 +195,22 @@ def get_load_test_results() -> str:
     return next(iter(log_dict.values()), None)
 
 
+@mcp.tool()
+def delete_experiment(type: str, name: str) -> dict:
+    """
+    Delete a fault injection experiment
+    Args:
+        type (str): The type of fault to delete.
+        name (str): The name of the experiment to delete.
+    Returns:
+        dict: The result of the deletion.
+    """
+    return fault_inject.delete_experiment(
+        type=type,
+        name=name,
+    )
+
+
 @mcp.resource(
     uri="service://all",
     name="all_services",

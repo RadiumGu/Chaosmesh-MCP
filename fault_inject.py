@@ -9,6 +9,7 @@ __all__ = [
     "host_stress_test",
     "host_disk_fault",
     "network_fault",
+    "delete_experiment",
 ]
 
 client = Client(version="v1alpha1")
@@ -145,6 +146,29 @@ def network_fault(service: str, type: str, kwargs: str) -> dict:
     """
     kwargs = _convert_to_dict(kwargs)
     return _pod_fault_inject(service=service, type=type, **kwargs)
+
+
+def delete_experiment(type: str, name: str) -> dict:
+    """
+    Delete a fault injection experiment
+    Args:
+        type (str): The type of fault to delete.
+        name (str): The name of the experiment to delete.
+    Returns:
+        dict: The result of the deletion.
+    """
+    try:
+        experiment_type = Experiment[type]
+    except KeyError:
+        return {
+            "error": f"Invalid experiment type: {type}. Valid types are: {list(Experiment.__dict__.keys())}"
+        }
+
+    return client.delete_experiment(
+        experiment_type=experiment_type,
+        namespace="default",
+        name=name,
+    )
 
 
 def _pod_fault_inject(service: str, type: str, **kwargs) -> dict:
