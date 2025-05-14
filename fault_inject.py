@@ -190,8 +190,6 @@ def _fault_inject(type: str, **kwargs) -> dict:
             "error": f"Invalid experiment type: {type}. Valid types are: {list(Experiment.__dict__.keys())}"
         }
 
-    print(f"Injecting fault: {type} with arguments: {kwargs}")
-
     return client.start_experiment(
         experiment_type=experiment_type,
         namespace="default",
