@@ -15,7 +15,7 @@ __all__ = [
 client = Client(version="v1alpha1")
 
 
-def pod_fault(service: str, type: str, kwargs: str) -> dict:
+def pod_fault(service: str, type: str, **kwargs) -> dict:
     """
     Inject a fault into a pod
     Args:
@@ -33,7 +33,6 @@ def pod_fault(service: str, type: str, kwargs: str) -> dict:
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-    kwargs = _convert_to_dict(kwargs)
     return _pod_fault_inject(
         service=service,
         type=type,
@@ -41,7 +40,7 @@ def pod_fault(service: str, type: str, kwargs: str) -> dict:
     )
 
 
-def pod_stress_test(service: str, type: str, container_names: list[str], kwargs: str) -> dict:
+def pod_stress_test(service: str, type: str, container_names: list[str], **kwargs) -> dict:
     """
     Simulate a stress test on a pod
     Args:
@@ -61,7 +60,6 @@ def pod_stress_test(service: str, type: str, container_names: list[str], kwargs:
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-    kwargs = _convert_to_dict(kwargs)
     return _pod_fault_inject(
         service=service,
         type=type,
@@ -70,7 +68,7 @@ def pod_stress_test(service: str, type: str, container_names: list[str], kwargs:
     )
 
 
-def host_stress_test(type: str, address: list[str], kwargs: str) -> dict:
+def host_stress_test(type: str, address: list[str], **kwargs) -> dict:
     """
     Simulate a stress test on a host
     Args:
@@ -87,7 +85,6 @@ def host_stress_test(type: str, address: list[str], kwargs: str) -> dict:
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-    kwargs = _convert_to_dict(kwargs)
     return _fault_inject(
         type=type,
         address=address,
@@ -95,7 +92,7 @@ def host_stress_test(type: str, address: list[str], kwargs: str) -> dict:
     )
 
 
-def host_disk_fault(type: str, address: list[str], size: str, path: str, kwargs: str) -> dict:
+def host_disk_fault(type: str, address: list[str], size: str, path: str, **kwargs) -> dict:
     """
     Simulate a disk fault on a host
     Args:
@@ -113,7 +110,6 @@ def host_disk_fault(type: str, address: list[str], size: str, path: str, kwargs:
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-    kwargs = _convert_to_dict(kwargs)
     return _fault_inject(
         type=type,
         address=address,
@@ -123,7 +119,7 @@ def host_disk_fault(type: str, address: list[str], size: str, path: str, kwargs:
     )
 
 
-def network_fault(service: str, type: str, kwargs: str) -> dict:
+def network_fault(service: str, type: str, **kwargs) -> dict:
     """
     Simulate a network fault on a pod
     Args:
@@ -135,7 +131,7 @@ def network_fault(service: str, type: str, kwargs: str) -> dict:
             - mode (str): The mode of the experiment, The mode options include one (selecting a random Pod), all (selecting all eligible Pods), fixed (selecting a specified number of eligible Pods), fixed-percent (selecting a specified percentage of Pods from the eligible Pods), and random-max-percent (selecting the maximum percentage of Pods from the eligible Pods).
             - value (str): The value for the mode configuration, depending on mode. For example, when mode is set to fixed-percent, value specifies the percentage of Pods.
             - direction (str): The direction of target packets. Available values include from (the packets from target), to (the packets to target), and both ( the packets from or to target). This parameter makes Chaos only take effect for a specific direction of packets.
-            - externalTargets (list[str]): The network targets except for Kubernetes, which can be IPv4 addresses or domains. This parameter only works with direction: to. e,.g., ["www.example.com", "1.1.1.1"].
+            - external_targets (list[str]): The network targets except for Kubernetes, which can be IPv4 addresses or domains or service name. e,.g., ["www.example.com", "1.1.1.1", "checkoutservice].
             - device (str): The affected network interface. e.g., "eth0".
             - rate (str): The bandwidth limit. Allows bit, kbit, mbit, gbit, tbit, bps, kbps, mbps, gbps, tbps unit. bps means bytes per second. e.g., "1mbps".
             - limit (int): The number of bytes waiting in queue.
@@ -144,7 +140,6 @@ def network_fault(service: str, type: str, kwargs: str) -> dict:
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-    kwargs = _convert_to_dict(kwargs)
     return _pod_fault_inject(service=service, type=type, **kwargs)
 
 
@@ -163,6 +158,8 @@ def delete_experiment(type: str, name: str) -> dict:
         return {
             "error": f"Invalid experiment type: {type}. Valid types are: {list(Experiment.__dict__.keys())}"
         }
+
+    print(f'Deleting experiment of type: {type} with name: {name}')
 
     return client.delete_experiment(
         experiment_type=experiment_type,
@@ -183,6 +180,9 @@ def _pod_fault_inject(service: str, type: str, **kwargs) -> dict:
 
 
 def _fault_inject(type: str, **kwargs) -> dict:
+    print(f'Starting fault injection of type: {type}')
+    print(f'Additional arguments: {kwargs}')
+
     try:
         experiment_type = Experiment[type]
     except KeyError:
@@ -190,23 +190,13 @@ def _fault_inject(type: str, **kwargs) -> dict:
             "error": f"Invalid experiment type: {type}. Valid types are: {list(Experiment.__dict__.keys())}"
         }
 
-    return client.start_experiment(
+    r = client.start_experiment(
         experiment_type=experiment_type,
         namespace="default",
         name=str(uuid.uuid4()),
         **kwargs,
     )
 
+    print(f'Experiment started: {r}')
 
-def _convert_to_dict(kwargs: str) -> dict:
-    """
-    Convert the kwargs to a dictionary format suitable for the experiment.
-    Args:
-        kwargs (str): The kwargs to convert.
-    Returns:
-        dict: The converted dictionary.
-    """
-    try:
-        return json.loads(kwargs)
-    except json.JSONDecodeError:
-        return dict(item.strip().split(': ', 1) for item in kwargs.strip('{}').split(','))
+    return r

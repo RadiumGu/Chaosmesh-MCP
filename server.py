@@ -8,147 +8,291 @@ mcp = FastMCP("Chaos Mesh", log_level="INFO")
 
 
 @mcp.tool()
-def pod_fault(service: str, type: str, kwargs: str = "") -> dict:
+def pod_kill(service: str, duration: str, mode: str, value: str) -> dict:
     """
-    Inject a fault into a pod
+    Kill pods of a service.
+
     Args:
-        service (str): The name of the service to inject the fault into, e.g., "adservice".
-        type (str): The type of fault to inject, one of "POD_FAILURE", "POD_KILL", "CONTAINER_KILL".
-            - POD_FAILURE: Simulate a pod failure.
-            - POD_KILL: Simulate a pod kill.
-            - CONTAINER_KILL: Simulate a container kill.
-        kwargs: Additional arguments for the experiment, you shuld pass in this format: {"key": "value", ...}.
-            - duration (str): The duration of the experiment, e.g., "5m" for 5 minutes.
-            - container_names (list[str]): The names of the containers to inject the fault into, only used for "CONTAINER_KILL".
-            - mode (str): The mode of the experiment, The mode options include one (selecting a random Pod), all (selecting all eligible Pods), fixed (selecting a specified number of eligible Pods), fixed-percent (selecting a specified percentage of Pods from the eligible Pods), and random-max-percent (selecting the maximum percentage of Pods from the eligible Pods).
-            - value (str): The value for the mode configuration, depending on mode. For example, when mode is set to fixed-percent, value specifies the percentage of Pods.
+        service (str): The name of the service to kill, e.g., "adservice".
+        duration (str): The duration of the experiment, e.g., "5m".
+        mode (str): The mode of the experiment, The mode options include one (selecting a random Pod), all (selecting all eligible Pods), fixed (selecting a specified number of eligible Pods), fixed-percent (selecting a specified percentage of Pods from the eligible Pods), and random-max-percent (selecting the maximum percentage of Pods from the eligible Pods).
+        value (str): value (str): The value for the mode configuration, depending on mode. For example, when mode is set to fixed-percent, value specifies the percentage of Pods.
 
     Returns:
         dict: The applied experiment's resource in Kubernetes.
     """
-
     return fault_inject.pod_fault(
         service=service,
-        type=type,
-        kwargs=kwargs,
+        type="POD_KILL",
+        kwargs={"duration": duration, "mode": mode, "value": value},
     )
 
 
 @mcp.tool()
-def pod_stress_test(service: str, type: str, container_names: list[str], kwargs: str = "") -> dict:
+def container_kill(service: str, duration: str, mode: str, value: str, container_names: list[str]) -> dict:
     """
-    Simulate a stress test on a pod
+    Kill containers within a pod.
+
     Args:
-        service (str): The name of the service to inject the fault into, e.g., "adservice".
-        type (str): The type of fault to inject, one of "POD_CPU_STRESS", "POD_MEMORY_STRESS".
-            - POD_CPU_STRESS: Simulate a CPU stress test.
-            - POD_MEMORY_STRESS: Simulate a memory stress test.
-        container_names (list[str]): The names of the containers to inject the fault into.
-        kwargs: Additional arguments for the experiment, you shuld pass in this format: {"key": "value", ...}.
-            - duration (str): The duration of the experiment, e.g., "5m" for 5 minutes.
-            - mode (str): The mode of the experiment, The mode options include one (selecting a random Pod), all (selecting all eligible Pods), fixed (selecting a specified number of eligible Pods), fixed-percent (selecting a specified percentage of Pods from the eligible Pods), and random-max-percent (selecting the maximum percentage of Pods from the eligible Pods).
-            - value (str): The value for the mode configuration, depending on mode. For example, when mode is set to fixed-percent, value specifies the percentage of Pods.
-            - workers (int): The number of workers for the stress test.
-            - load (int): The percentage of CPU occupied. 0 means that no additional CPU is added, and 100 refers to full load. The final sum of CPU load is workers * load.
-            - size (str): The memory size to be occupied or a percentage of the total memory size. The final sum of the occupied memory size is size. e.g., "256MB", "50%".
-            - time (str): The time to reach the memory size. The growth model is a linear model. e.g., "10min".
+        service (str): The name of the service to inject fault into.
+        duration (str): Duration of the stress.
+        mode (str): Mode of pod selection.
+        value (str): Mode value.
+        container_names (list[str]): List of container names to kill.
+
+    Returns:
+        dict: The applied experiment's resource.
+    """
+    return fault_inject.pod_fault(
+        service=service,
+        type="CONTAINER_KILL",
+        kwargs={"duration": duration, "mode": mode,
+                "value": value, "container_names": container_names},
+    )
+
+
+@mcp.tool()
+def pod_failure(service: str, duration: str, mode: str, value: str) -> dict:
+    """
+    Inject a failure into pods of a service.
+
+    Args:
+        service (str): The name of the service to kill, e.g., "adservice".
+        duration (str): Duration of the stress.
+        mode (str): Mode of pod selection.
+        value (str): Mode value.
+
     Returns:
         dict: The applied experiment's resource in Kubernetes.
+    """
+    return fault_inject.pod_fault(
+        service=service,
+        type="POD_FAILURE",
+        kwargs={"duration": duration, "mode": mode, "value": value},
+    )
+
+
+@mcp.tool()
+def pod_cpu_stress(service: str, duration: str, mode: str, value: str, container_names: list[str], workers: int, load: int) -> dict:
+    """
+    Apply CPU stress on pods.
+
+    Args:
+        service (str): Service name.
+        duration (str): Duration of the stress.
+        mode (str): Mode of pod selection.
+        value (str): Mode value.
+        container_names (list[str]): Containers to stress.
+        workers (int): The number of workers for the stress test.
+        load (int): The percentage of CPU occupied. 0 means that no additional CPU is added, and 100 refers to full load. The final sum of CPU load is workers * load.
+
+    Returns:
+        dict: Applied stress test configuration.
     """
     return fault_inject.pod_stress_test(
         service=service,
-        type=type,
+        type="POD_STRESS_CPU",
         container_names=container_names,
-        kwargs=kwargs,
+        kwargs={"duration": duration, "mode": mode,
+                "value": value, "workers": workers, "load": load},
     )
 
 
 @mcp.tool()
-def host_stress_test(type: str, address: list[str], kwargs: str = "") -> dict:
+def pod_memory_stress(service: str, duration: str, mode: str, value: str, container_names: list[str], size: str, time: str) -> dict:
     """
-    Simulate a stress test on a host
-    Args:
-        type (str): The type of fault to inject, one of "HOST_CPU_STRESS", "HOST_MEMORY_STRESS".
-            - HOST_CPU_STRESS: Simulate a CPU stress test.
-            - HOST_MEMORY_STRESS: Simulate a memory stress test.
-        address (list[str]): The addresses of the hosts to inject the fault into.
-        kwargs: Additional arguments for the experiment, you shuld pass in this format: {"key": "value", ...}.
-            - duration (str): The duration of the experiment, e.g., "5m" for 5 minutes.
-            - workers (int): The number of workers for the stress test.
-            - load (int): The percentage of CPU occupied. 0 means that no additional CPU is added, and 100 refers to full load. The final sum of CPU load is workers * load.
-            - size (str): The memory size to be occupied or a percentage of the total memory size. The final sum of the occupied memory size is size. e.g., "256MB", "50%".
-            - time (str): The time to reach the memory size. The growth model is a linear model. e.g., "10min".
-    Returns:
-        dict: The applied experiment's resource in Kubernetes.
-    """
+    Apply memory stress on pods.
 
+    Args:
+        service (str): Service name.
+        duration (str): Experiment duration.
+        mode (str): Mode of pod selection.
+        value (str): Mode value.
+        container_names (list[str]): Containers to stress.
+        size (str): The memory size to be occupied or a percentage of the total memory size. The final sum of the occupied memory size is size. e.g., "256MB", "50%".
+        time (str): The time to reach the memory size. The growth model is a linear model. e.g., "10min".
+
+    Returns:
+        dict: Applied memory stress test resource.
+    """
+    return fault_inject.pod_stress_test(
+        service=service,
+        type="POD_STRESS_MEMORY",
+        container_names=container_names,
+        kwargs={"duration": duration, "mode": mode,
+                "value": value, "size": size, "time": time},
+    )
+
+
+@mcp.tool()
+def host_cpu_stress(address: list[str], duration: str, workers: int, load: int) -> dict:
+    """
+    Apply CPU stress to hosts.
+
+    Args:
+        address (list[str]): List of target host IPs.
+        duration (str): Stress duration.
+        workers (int): Number of CPU stress workers.
+        load (int): CPU load percentage per worker.
+
+    Returns:
+        dict: Stress test resource.
+    """
     return fault_inject.host_stress_test(
-        type=type,
+        type="HOST_STRESS_CPU",
         address=address,
-        kwargs=kwargs,
+        kwargs={"duration": duration, "workers": workers, "load": load},
     )
 
 
 @mcp.tool()
-def host_disk_fault(type: str, address: list[str], size: str, path: str, kwargs: str = "") -> dict:
+def host_memory_stress(address: list[str], duration: str, size: str, time: str) -> dict:
     """
-    Simulate a disk fault on a host
-    Args:
-        type (str): The type of fault to inject, one of "HOST_DISK_FILL", "HOST_READ_PAYLOAD", "HOST_WRITE_PAYLOAD".
-            - HOST_DISK_FILL: Simulate a disk fill.
-            - HOST_READ_PAYLOAD: Simulate a disk read payload.
-            - HOST_WRITE_PAYLOAD: Simulate a disk write payload.
-        address (list[str]): The addresses of the hosts to inject the fault into.
-        size (str): The size of the payload, e.g., "1024K".
-        path (str): The path to the file to be read or written.
-        kwargs: Additional arguments for the experiment, you shuld pass in this format: {"key": "value", ...}.
-            - payload_process_num (int): The number of processes to read or write the payload.
-            - fill_by_fallocate (bool): Whether to fill the disk by fallocate.
-            - duration (str): The duration of the experiment, e.g., "5m" for 5 minutes.
-    Returns:
-        dict: The applied experiment's resource in Kubernetes.
-    """
+    Apply memory stress to hosts.
 
+    Args:
+        address (list[str]): Host addresses.
+        duration (str): Duration of experiment.
+        size (str): Memory size to allocate.
+        time (str): Time to gradually consume memory.
+
+    Returns:
+        dict: Memory stress configuration.
+    """
+    return fault_inject.host_stress_test(
+        type="HOST_STRESS_MEMORY",
+        address=address,
+        kwargs={"duration": duration, "size": size, "time": time},
+    )
+
+
+@mcp.tool()
+def host_disk_fill(address: list[str], duration: str, size: str, path: str, payload_process_num: int, fill_by_fallocate: bool) -> dict:
+    """
+    Fill disk on hosts.
+
+    Args:
+        address (list[str]): Host IPs.
+        duration (str): Experiment duration.
+        size (str): The size of the payload, e.g., "1024K".
+        path (str): Target path.
+        payload_process_num (int): Number of fill processes.
+        fill_by_fallocate (bool): Use fallocate or not.
+
+    Returns:
+        dict: Disk fault resource.
+    """
     return fault_inject.host_disk_fault(
-        type=type,
+        type="HOST_FILL",
         address=address,
         size=size,
         path=path,
-        kwargs=kwargs,
+        kwargs={"duration": duration, "payload_process_num": payload_process_num,
+                "fill_by_fallocate": fill_by_fallocate},
     )
 
 
 @mcp.tool()
-def network_fault(service: str, type: str, kwargs: str = "") -> dict:
+def host_read_payload(address: list[str], duration: str, size: str, path: str, payload_process_num: int) -> dict:
     """
-    Simulate a network fault on a pod
+    Read payload on hosts.
+
+    Args:
+        address (list[str]): Host IPs.
+        duration (str): Experiment duration.
+        size (str): Disk size to fill.
+        path (str): Target path.
+        payload_process_num (int): The number of processes to read or write the payload.
+
+    Returns:
+        dict: Disk fault resource.
+    """
+    return fault_inject.host_disk_fault(
+        type="HOST_READ_PAYLOAD",
+        address=address,
+        size=size,
+        path=path,
+        kwargs={"duration": duration,
+                "payload_process_num": payload_process_num},
+    )
+
+
+@mcp.tool()
+def host_write_payload(address: list[str], duration: str, size: str, path: str, payload_process_num: int) -> dict:
+    """
+    Write payload on hosts.
+
+    Args:
+        address (list[str]): Host IPs.
+        duration (str): Experiment duration.
+        size (str): Disk size to fill.
+        path (str): Target path.
+        payload_process_num (int): The number of processes to read or write the payload.
+
+    Returns:
+        dict: Disk fault resource.
+    """
+    return fault_inject.host_disk_fault(
+        type="HOST_WRITE_PAYLOAD",
+        address=address,
+        size=size,
+        path=path,
+        kwargs={"duration": duration,
+                "payload_process_num": payload_process_num},
+    )
+
+
+@mcp.tool()
+def network_bandwidth(service: str, mode: str, value: str, direction: str, rate: str, limit: int, buffer: int, external_targets: list[str]) -> dict:
+    """
+    Limit network bandwidth to a pod.
+
+    Args:
+        service (str): Service to affect.
+        mode (str): Mode of pod selection.
+        value (str): Mode value.
+        direction (str): The direction of target packets. Available values include from (the packets from target), to (the packets to target), and both ( the packets from or to target). This parameter makes Chaos only take effect for a specific direction of packets.
+        rate (str): The bandwidth limit. Allows bit, kbit, mbit, gbit, tbit, bps, kbps, mbps, gbps, tbps unit. bps means bytes per second. e.g., "1mbps".
+        limit (int): The number of bytes waiting in queue.
+        buffer (int): The maximum number of bytes that can be sent instantaneously.
+        external_targets (list[str]): The network targets except for Kubernetes, which can be IPv4 addresses or domains or service name. e,.g., ["www.example.com", "1.1.1.1", "checkoutservice].
+
+    Returns:
+        dict: Bandwidth limit configuration.
+    """
+    return fault_inject.network_fault(
+        service=service,
+        type="NETWORK_BANDWIDTH",
+        kwargs={"mode": mode, "value": value, "direction": direction, "rate": rate,
+                "limit": limit, "buffer": buffer, "external_targets": external_targets},
+    )
+
+
+@mcp.tool()
+def network_partition(service: str, mode: str, value: str, direction: str, external_targets: list[str]) -> dict:
+    """
+    Apply a network partition for a pod.
+
     Args:
         service (str): The name of the service to inject the fault into, e.g., "adservice".
-        type (str): The type of fault to inject, one of "NETWORK_PARTITION", "NETWORK_BANDWIDTH".
-            - NETWORK_PARTITION: Simulate a network partition.
-            - NETWORK_BANDWIDTH: Simulate a network bandwidth limitation.
-        kwargs: Additional arguments for the experiment, you shuld pass in this format: {"key": "value", ...}.
-            - mode (str): The mode of the experiment, The mode options include one (selecting a random Pod), all (selecting all eligible Pods), fixed (selecting a specified number of eligible Pods), fixed-percent (selecting a specified percentage of Pods from the eligible Pods), and random-max-percent (selecting the maximum percentage of Pods from the eligible Pods).
-            - value (str): The value for the mode configuration, depending on mode. For example, when mode is set to fixed-percent, value specifies the percentage of Pods.
-            - direction (str): The direction of target packets. Available values include from (the packets from target), to (the packets to target), and both ( the packets from or to target). This parameter makes Chaos only take effect for a specific direction of packets.
-            - externalTargets (list[str]): The network targets except for Kubernetes, which can be IPv4 addresses or domains. This parameter only works with direction: to. e,.g., ["www.example.com", "1.1.1.1"].
-            - device (str): The affected network interface. e.g., "eth0".
-            - rate (str): The bandwidth limit. Allows bit, kbit, mbit, gbit, tbit, bps, kbps, mbps, gbps, tbps unit. bps means bytes per second. e.g., "1mbps".
-            - limit (int): The number of bytes waiting in queue.
-            - buffer (int): The maximum number of bytes that can be sent instantaneously.
-            - target_service (str): Used in combination with direction, making Chaos only effective for some packets.
-    Returns:
+        mode (str): The mode of the experiment.
+        value (str): The value for the mode configuration.
+        direction (str): The direction of target packets.
+        external_targets (list[str]): The network targets except for Kubernetes, which can be IPv4 addresses or domains or service name."
+
+    Response:
         dict: The applied experiment's resource in Kubernetes.
     """
     return fault_inject.network_fault(
         service=service,
-        type=type,
-        kwargs=kwargs,
+        type="NETWORK_PARTITION",
+        kwargs={"mode": mode, "value": value, "direction": direction,
+                "external_targets": external_targets},
     )
 
 
 @mcp.tool()
-def get_logs(service_name: str, namespace: str, container_name: str, type: str = "all", tail_lines: int = 20) -> dict:
+def get_logs(service_name: str, namespace: str, container_name: str) -> dict:
     """
     Retrieve logs for the pods of a specific service in a namespace.
 
@@ -156,11 +300,6 @@ def get_logs(service_name: str, namespace: str, container_name: str, type: str =
         service_name (str): Name of the service.
         namespace (str): Namespace of the service.
         container_name (str): Name of the container.
-        type (str): Type of logs to retrieve. Default is "all".
-            - "all": Retrieve logs from all pods.
-            - "one": Retrieve logs from one pod.
-        tail_lines (int): Number of lines to return from the end of the logs.
-            Default is 20.
 
     Returns:
         dict: Dictionary with pod names as keys and logs as values.
@@ -169,8 +308,8 @@ def get_logs(service_name: str, namespace: str, container_name: str, type: str =
         service_name=service_name,
         namespace=namespace,
         container_name=container_name,
-        type=type,
-        tail_lines=tail_lines
+        type="all",
+        tail_lines=50
     )
 
 
@@ -192,7 +331,8 @@ def get_load_test_results() -> str:
         tail_lines=20
     )
 
-    return next(iter(log_dict.values()), None)
+    result = next(iter(log_dict.values()), None)
+    return result if result is not None else ""
 
 
 @mcp.tool()
@@ -211,10 +351,50 @@ def delete_experiment(type: str, name: str) -> dict:
     )
 
 
+@mcp.tool()
+def load_generate(rate: int) -> list[str]:
+    """
+    Generate load on the cluster
+    Args:
+        rate (int): The rate of the load generator.
+    Returns:
+        list[str]: The response of the load generation.
+    """
+    return kube.load_generate(rate=rate)
+
+
+@mcp.tool()
+def inject_delay_fault(service: str, delay: int) -> dict:
+    """
+    Inject a delay fault into a service. Attention: this fault affects the request to the service, not the service itself.
+    Args:
+        service (str): The name of the service to inject the fault into.
+        delay (int): The delay time in seconds.
+    Returns:
+        dict: The result of the fault injection.
+    """
+    return kube.inject_delay_fault(
+        service_name=service,
+        delay_seconds=delay,
+    )
+
+
+@mcp.tool()
+def remove_delay_fault(service: str) -> dict:
+    """
+    Remove a delay fault from a service
+    Args:
+        service (str): The name of the service to remove the fault from.
+    Returns:
+        dict: The result of the fault removal.
+    """
+    return kube.remove_delay_fault(service)
+
+
 @mcp.resource(
     uri="service://all",
     name="all_services",
-    description="All services in the cluster"
+    description="All services in the cluster and their call relationships.",
 )
 def all_services() -> list[dict]:
     """

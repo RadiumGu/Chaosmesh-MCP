@@ -1,7 +1,9 @@
-from kubernetes import client, config
+from kubernetes import client, config, utils
+import requests
 
 config.load_kube_config()
 v1 = client.CoreV1Api()
+api = client.CustomObjectsApi()
 
 
 def get_pod_logs(pod_name: str, namespace: str, container_name: str, tail_lines: int = 20) -> str:
@@ -26,7 +28,7 @@ def get_pod_logs(pod_name: str, namespace: str, container_name: str, tail_lines:
 
     except Exception as e:
         print(f"Error retrieving logs: {e}")
-        return None
+        return ""
 
 
 def get_pods_by_service(service_name: str, namespace: str) -> list[str]:
@@ -88,3 +90,83 @@ def get_service_pod_logs(service_name: str, namespace: str, container_name: str,
             print(f"No logs found for pod '{pod_name}'.")
 
     return pod_logs
+
+
+def load_generate(rate: int) -> list[str]:
+    url = "http://localhost:80"
+    results = []
+
+    def send_request():
+        try:
+            response = requests.get(url=url, timeout=5)
+            return f"Status: {response.status_code}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=min(rate, 100)) as executor:
+        futures = [executor.submit(send_request) for _ in range(rate)]
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    return results
+
+
+def inject_delay_fault(service_name: str, delay_seconds: int):
+    virtual_service_manifest = {
+        "apiVersion": "networking.istio.io/v1",
+        "kind": "VirtualService",
+        "metadata": {
+            "name": f"{service_name}-delay",
+            "namespace": "default",
+        },
+        "spec": {
+            "hosts": [service_name],
+            "http": [
+                {
+                    "fault": {
+                        "delay": {
+                            "fixedDelay": f"{delay_seconds}s",
+                            "percentage": {
+                                "value": 100,
+                            }
+                        }
+                    },
+                    "route": [
+                        {
+                            "destination": {
+                                "host": service_name
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    r = api.create_namespaced_custom_object(
+        group="networking.istio.io",
+        version="v1",
+        namespace="default",
+        plural="virtualservices",
+        body=virtual_service_manifest,
+    )
+    print(
+        f"Injected delay fault for service '{service_name}' with {delay_seconds} seconds delay.")
+
+    return r
+
+
+def remove_delay_fault(service_name: str):
+    try:
+        r = api.delete_namespaced_custom_object(
+            group="networking.istio.io",
+            version="v1",
+            namespace="default",
+            plural="virtualservices",
+            name=f"{service_name}-delay",
+        )
+        print(r)
+        print(f"Removed delay fault for service '{service_name}'.")
+    except Exception as e:
+        print(f"Error removing delay fault: {e}")
