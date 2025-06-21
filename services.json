@@ -1,185 +1,193 @@
-[
-    {
-        "name": "adservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=adservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "cartservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=cartservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "checkoutservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=checkoutservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "currencyservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=currencyservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "emailservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=emailservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "frontend",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=frontend"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "paymentservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=paymentservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "productcatalogservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=productcatalogservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "recommendationservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=recommendationservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "shippingservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=shippingservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "paymentservice",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=paymentservice"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "name": "redis-cart",
-        "namespace": "default",
-        "type": "pod",
-        "labels": [
-            "app=redis-cart"
-        ],
-        "containers": [
-            {
-                "name": "server"
-            }
-        ]
-    },
-    {
-        "service_call_graph": {
-            "frontend": [
-                "adservice",
-                "recommendationservice",
-                "productcatalogservice",
-                "cartservice",
-                "checkoutservice",
-                "shippingservice",
-                "currencyservice"
+{
+    "mcp_configuration": {
+        "chaosmesh-mcp": {
+            "autoApprove": [],
+            "disabled": false,
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/home/ec2-user/mcp-servers/chaosmesh-mcp",
+                "run",
+                "python",
+                "server.py",
+                "--transport",
+                "stdio"
             ],
-            "recommendationservice": [
-                "productcatalogservice"
+            "env": {
+                "AWS_PROFILE": "default",
+                "AWS_REGION": "us-east-2"
+            },
+            "transportType": "stdio"
+        }
+    },
+    "services": [
+        {
+            "name": "adservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=adservice"
             ],
-            "cartservice": [
-                "redis-cart"
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "cartservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=cartservice"
             ],
-            "checkoutservice": [
-                "productcatalogservice",
-                "shippingservice",
-                "paymentservice",
-                "emailservice",
-                "cartservice",
-                "currencyservice"
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "checkoutservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=checkoutservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "currencyservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=currencyservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "emailservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=emailservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "frontend",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=frontend"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "paymentservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=paymentservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "productcatalogservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=productcatalogservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "recommendationservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=recommendationservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "shippingservice",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=shippingservice"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
+            ]
+        },
+        {
+            "name": "redis-cart",
+            "namespace": "default",
+            "type": "pod",
+            "labels": [
+                "app=redis-cart"
+            ],
+            "containers": [
+                {
+                    "name": "server"
+                }
             ]
         }
+    ],
+    "service_call_graph": {
+        "frontend": [
+            "adservice",
+            "recommendationservice",
+            "productcatalogservice",
+            "cartservice",
+            "checkoutservice",
+            "shippingservice",
+            "currencyservice"
+        ],
+        "recommendationservice": [
+            "productcatalogservice"
+        ],
+        "cartservice": [
+            "redis-cart"
+        ],
+        "checkoutservice": [
+            "productcatalogservice",
+            "shippingservice",
+            "paymentservice",
+            "emailservice",
+            "cartservice",
+            "currencyservice"
+        ]
     }
-]
+}

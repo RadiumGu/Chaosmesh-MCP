@@ -30,7 +30,7 @@ Before starting, make sure you have `uv` installed. You can install `uv` [here](
 ### 1. Clone the repository:
 
 ```bash
-git clone https://github.com/Hades-gsl/mcp_server.git
+git clone https://github.com/RadiumGu/Chaosmesh-MCP.git
 cd mcp_server
 ```
 
@@ -59,7 +59,7 @@ Run the MCP server using the following command:
 uv run python server.py
 ```
 
-You can specify the transport method by adding the `--transport` argument. By default, the `transport` parameter is set to `sse`.
+You can specify the transport method by adding the `--transport` argument. By default, the `transport` parameter is set to `stdio`.
 
 ## Service Infomation
 
