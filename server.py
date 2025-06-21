@@ -410,7 +410,7 @@ def all_services() -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(
         description="Run the MCP with a specified transport.")
-    parser.add_argument('--transport', type=str, default='sse',
+    parser.add_argument('--transport', type=str, default='stdio',
                         help="Specify the transport type.")
     args = parser.parse_args()
     mcp.run(transport=args.transport)
