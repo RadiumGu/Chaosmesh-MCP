@@ -24,6 +24,7 @@ MCP Server is a tool for injecting faults and performing stress tests on Kuberne
 
 ### Prerequisites:
 
+Before starting, make sure you have `chaosmesh` installed. You can install `chaosmesh` [here](https://chaos-mesh.org/docs/production-installation-using-helm/) .
 Before starting, make sure you have `uv` installed. You can install `uv` [here](https://docs.astral.sh/uv/getting-started/installation/) .
 
 
