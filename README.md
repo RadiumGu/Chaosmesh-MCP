@@ -1,67 +1,221 @@
-# MCP Server
+# Chaos Mesh MCP Server
 
-MCP Server is a tool for injecting faults and performing stress tests on Kubernetes pods and hosts using `Chaos Mesh`. It also provides utilities for retrieving logs and monitoring load test results.
+A Model Context Protocol (MCP) server for Chaos Mesh fault injection, optimized for AWS EKS environments with full namespace support.
 
 ## Features
 
-- **Pod Fault Injection**: Simulate pod failures, pod kills, and container kills.
-- **Pod Stress Testing**: Simulate CPU and memory stress tests on pods.
-- **Host Stress Testing**: Simulate CPU and memory stress tests on hosts.
-- **Host Disk Faults**: Simulate disk fill, read payload, and write payload faults on hosts.
-- **Network Faults**: Simulate network partition and bandwidth limitations.
-- **Log Retrieval**: Retrieve logs for specific services and containers.
-- **Load Test Monitoring**: Parse and retrieve aggregated load test results.
+- **Pod Fault Injection**: Kill pods, inject failures, stress CPU/memory
+- **Network Chaos**: Simulate network delays, partitions, bandwidth limits
+- **Host-level Chaos**: CPU/memory stress, disk operations on nodes
+- **EKS Optimized**: Enhanced support for AWS EKS with proper RBAC and authentication
+- **Namespace Support**: All tools support custom namespaces
+- **Improved Error Handling**: Detailed error messages and retry mechanisms
+- **Health Monitoring**: Built-in health checks and diagnostics
 
-## Project Structure
+## Quick Start for EKS
 
-- `fault_inject.py`: Contains functions for injecting faults and performing stress tests.
-- `kube.py`: Provides utilities for interacting with Kubernetes, such as retrieving pod logs.
-- `server.py`: Implements the MCP server and exposes tools for fault injection and log retrieval.
-- `test.py`: Contains test cases and examples for using the fault injection and logging utilities.
-- `services.json`: Defines the services in the cluster, including their namespaces, labels, and containers.
+### 1. Setup Environment
+
+```bash
+cd /home/ec2-user/mcp-servers/Chaosmesh-MCP
+./setup-eks-permissions.sh
+```
+
+### 2. Start MCP Server
+
+```bash
+export KUBECONFIG=./chaos-mesh-mcp-kubeconfig
+python server.py --kubeconfig ./chaos-mesh-mcp-kubeconfig
+```
+
+## Namespace Support
+
+All Chaos Mesh MCP tools now support specifying custom namespaces:
+
+### Available Tools with Namespace Support
+
+- `pod_kill(service, duration, mode, value, namespace="default")`
+- `pod_failure(service, duration, mode, value, namespace="default")`
+- `pod_cpu_stress(service, duration, mode, value, container_names, workers, load, namespace="default")`
+- `pod_memory_stress(service, duration, mode, value, container_names, size, time, namespace="default")`
+- `container_kill(service, duration, mode, value, container_names, namespace="default")`
+- `network_partition(service, mode, value, direction, external_targets, namespace="default")`
+- `network_bandwidth(service, mode, value, direction, rate, limit, buffer, external_targets, namespace="default")`
+- `delete_experiment(type, name, namespace="default")`
+- `inject_delay_fault(service, delay, namespace="default")`
+- `remove_delay_fault(service, namespace="default")`
+
+### New Namespace Management Tools
+
+- `list_namespaces()`: List all available namespaces
+- `list_services_in_namespace(namespace="default")`: List services in a specific namespace
+- `health_check()`: Check system health
+
+### Example Usage
+
+```python
+# List all namespaces
+namespaces = list_namespaces()
+
+# List services in votingapp namespace
+services = list_services_in_namespace("votingapp")
+
+# Kill 50% of votingapp pods in votingapp namespace for 30 seconds
+pod_kill(
+    service="votingapp",
+    duration="30s", 
+    mode="fixed-percent",
+    value="50",
+    namespace="votingapp"
+)
+
+# Apply CPU stress in production namespace
+pod_cpu_stress(
+    service="api-service",
+    duration="2m",
+    mode="fixed",
+    value="2",
+    container_names=["api"],
+    workers=2,
+    load=80,
+    namespace="production"
+)
+
+# Check system health
+health_status = health_check()
+```
 
 ## Installation
 
-### Prerequisites:
+### Prerequisites
 
-Before starting, make sure you have `chaosmesh` installed. You can install `chaosmesh` [here](https://chaos-mesh.org/docs/production-installation-using-helm/) .
-Before starting, make sure you have `uv` installed. You can install `uv` [here](https://docs.astral.sh/uv/getting-started/installation/) .
+- Python 3.10+
+- kubectl configured for your cluster
+- Helm (for Chaos Mesh installation)
+- AWS CLI (for EKS environments)
 
-
-### 1. Clone the repository:
-
-```bash
-git clone https://github.com/RadiumGu/Chaosmesh-MCP.git
-cd mcp_server
-```
-
-### 2. Build and set up the virtual environment using `uv`:
+### Dependencies
 
 ```bash
-uv venv
-source .venv/bin/activate
+pip install chaos-mesh>=1.2.13 kubernetes>=32.0.1 mcp[cli]>=1.7.1
 ```
 
-### 3. Install dependencies:
+## Configuration
+
+### EKS Environment
+
+For AWS EKS clusters, use the provided setup script:
 
 ```bash
-uv sync
+./setup-eks-permissions.sh
 ```
 
-### 4. Install `Chaos Mesh` in your Kubernetes cluster.
+This script will:
+- Install Chaos Mesh if not present
+- Create necessary RBAC permissions with cross-namespace support
+- Generate a service account kubeconfig
+- Verify the setup
 
-You can intall it [here](https://chaos-mesh.org/docs/production-installation-using-helm/).
+### Manual Configuration
 
-## Usage
+1. **Install Chaos Mesh**:
+   ```bash
+   helm repo add chaos-mesh https://charts.chaos-mesh.org
+   helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace
+   ```
 
-Run the MCP server using the following command:
+2. **Apply RBAC**:
+   ```bash
+   kubectl apply -f rbac-config.yaml
+   ```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Timeouts**: 
+   - Check Chaos Mesh installation
+   - Verify RBAC permissions
+   - Use `health_check()` tool
+
+2. **Permission Denied**:
+   - Apply RBAC configuration
+   - Use service account kubeconfig
+
+3. **Service Not Found**:
+   - Verify service name and namespace
+   - Use `list_services_in_namespace()` to check available services
+   - Check label selectors
+
+4. **Namespace Issues**:
+   - Use `list_namespaces()` to see available namespaces
+   - Ensure namespace exists before running experiments
+
+### Debug Mode
 
 ```bash
-uv run python server.py
+python server.py --skip-env-check --kubeconfig ./chaos-mesh-mcp-kubeconfig
 ```
 
-You can specify the transport method by adding the `--transport` argument. By default, the `transport` parameter is set to `stdio`.
+### Logs
 
-## Service Infomation
+Check Chaos Mesh controller logs:
+```bash
+kubectl logs -n chaos-mesh -l app.kubernetes.io/name=chaos-mesh
+```
 
-Write the `services.json` file to show the services in your cluster. You can write anything useful, the more detailed the better.
+Check experiments across namespaces:
+```bash
+kubectl get podchaos --all-namespaces
+```
+
+## Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   MCP Client    │────│  Chaos Mesh MCP │────│   Kubernetes    │
+│                 │    │     Server       │    │    Cluster      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │
+                                │
+                       ┌──────────────────┐
+                       │   Chaos Mesh     │
+                       │   Controllers    │
+                       └──────────────────┘
+```
+
+## Security
+
+- Uses dedicated service account with minimal permissions
+- Supports cross-namespace operations with proper RBAC
+- Token-based authentication for EKS
+- Namespace isolation support
+- Audit logging support
+
+## Best Practices
+
+1. **Use service accounts**: Avoid using personal credentials
+2. **Namespace isolation**: Use different namespaces for different environments
+3. **Monitor experiments**: Regularly check experiment status across namespaces
+4. **Clean up resources**: Delete completed experiments promptly
+5. **Detailed logging**: Enable verbose logging for troubleshooting
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test in EKS environment with multiple namespaces
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review logs and health status
+3. Consult the EKS setup guide (EKS-SETUP.md)
+4. Use namespace management tools for debugging
