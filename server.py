@@ -23,6 +23,16 @@ def check_environment():
     kubeconfig_path = os.environ.get('KUBECONFIG', os.path.expanduser('~/.kube/config'))
     if not os.path.exists(kubeconfig_path):
         issues.append(f"Kubeconfig not found at {kubeconfig_path}")
+        
+        # 检查是否存在本地生成的kubeconfig
+        local_kubeconfig = "./chaos-mesh-mcp-kubeconfig"
+        if os.path.exists(local_kubeconfig):
+            logger.info(f"Found local kubeconfig at {local_kubeconfig}")
+            logger.info("You can use it by running: python server.py --kubeconfig ./chaos-mesh-mcp-kubeconfig")
+        else:
+            logger.error("Local kubeconfig not found. Please run the setup script first:")
+            logger.error("  ./setup-eks-permissions.sh")
+            logger.error("This will generate the required chaos-mesh-mcp-kubeconfig file")
     
     # 检查AWS配置（如果在EKS环境中）
     if not os.environ.get('AWS_REGION') and not os.path.exists(os.path.expanduser('~/.aws/config')):
@@ -37,12 +47,18 @@ def check_environment():
         logger.info("✓ Chaos Mesh namespace found")
     except Exception as e:
         issues.append(f"Chaos Mesh not accessible: {e}")
+        logger.error("If Chaos Mesh is not installed, the setup script will install it:")
+        logger.error("  ./setup-eks-permissions.sh")
     
     if issues:
         logger.error("Environment issues found:")
         for issue in issues:
             logger.error(f"  - {issue}")
-        logger.error("Please run the setup script to resolve these issues")
+        logger.error("\n" + "="*60)
+        logger.error("SETUP REQUIRED:")
+        logger.error("1. Run the setup script: ./setup-eks-permissions.sh")
+        logger.error("2. Start the server: python server.py --kubeconfig ./chaos-mesh-mcp-kubeconfig")
+        logger.error("="*60)
     else:
         logger.info("✓ Environment check passed")
     
