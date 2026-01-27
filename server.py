@@ -233,7 +233,7 @@ def pod_cpu_stress(service: str, duration: str, mode: str, value: str, container
 
 
 @mcp.tool()
-def pod_memory_stress(service: str, duration: str, mode: str, value: str, container_names: list[str], size: str, time: str, namespace: str = "default") -> dict:
+def pod_memory_stress(service: str, duration: str, mode: str, value: str, container_names: list[str], size: str, namespace: str = "default") -> dict:
     """
     Apply memory stress on pods.
 
@@ -244,7 +244,6 @@ def pod_memory_stress(service: str, duration: str, mode: str, value: str, contai
         value (str): Mode value.
         container_names (list[str]): Containers to stress.
         size (str): The memory size to be occupied or a percentage of the total memory size. The final sum of the occupied memory size is size. e.g., "256MB", "50%".
-        time (str): The time to reach the memory size. The growth model is a linear model. e.g., "10min".
         namespace (str): The namespace where the service is located. Default is "default".
 
     Returns:
@@ -259,7 +258,6 @@ def pod_memory_stress(service: str, duration: str, mode: str, value: str, contai
         mode=mode,
         value=value,
         size=size,
-        time=time,
     )
 
 

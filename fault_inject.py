@@ -148,8 +148,6 @@ def _apply_stress_chaos_via_kubectl(type: str, namespace: str, name: str, **kwar
                 "size": kwargs.get('size', '256MB')
             }
         }
-        if kwargs.get('time'):
-            spec["spec"]["stressors"]["memory"]["time"] = kwargs.get('time')
     
     # Add containerNames if provided
     if kwargs.get('container_names'):
