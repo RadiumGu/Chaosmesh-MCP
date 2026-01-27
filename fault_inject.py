@@ -307,7 +307,6 @@ def delete_experiment(type: str, name: str, namespace: str = "default") -> dict:
 def _pod_fault_inject(service: str, type: str, namespace: str = "default", **kwargs) -> dict:
     selector = Selector(
         labelSelectors={"app": service}, 
-        pods=None, 
         namespaces=[namespace]
     )
     kwargs['selector'] = selector
