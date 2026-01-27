@@ -104,6 +104,96 @@ __all__ = [
 ]
 
 
+def _apply_stress_chaos_via_kubectl(type: str, namespace: str, name: str, **kwargs) -> dict:
+    """
+    Workaround function to apply StressChaos using kubectl due to chaos-mesh Python client bug.
+    The client doesn't include 'value' and 'containerNames' fields in the spec.
+    """
+    import subprocess
+    import tempfile
+    import yaml
+    from dataclasses import asdict
+    
+    # Build the StressChaos spec
+    spec = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "StressChaos",
+        "metadata": {
+            "name": name,
+            "namespace": namespace
+        },
+        "spec": {
+            "selector": asdict(kwargs.get('selector')),
+            "mode": kwargs.get('mode', 'all'),
+            "duration": kwargs.get('duration', ''),
+        }
+    }
+    
+    # Add value if mode requires it
+    if kwargs.get('mode') in ['fixed', 'fixed-percent', 'random-max-percent']:
+        spec["spec"]["value"] = kwargs.get('value', '')
+    
+    # Add stressors based on type
+    if type == "POD_STRESS_CPU":
+        spec["spec"]["stressors"] = {
+            "cpu": {
+                "workers": kwargs.get('workers', 1),
+                "load": kwargs.get('load', 100)
+            }
+        }
+    elif type == "POD_STRESS_MEMORY":
+        spec["spec"]["stressors"] = {
+            "memory": {
+                "workers": kwargs.get('workers', 1),
+                "size": kwargs.get('size', '256MB')
+            }
+        }
+        if kwargs.get('time'):
+            spec["spec"]["stressors"]["memory"]["time"] = kwargs.get('time')
+    
+    # Add containerNames if provided
+    if kwargs.get('container_names'):
+        spec["spec"]["containerNames"] = kwargs.get('container_names')
+    
+    # Write to temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(spec, f)
+        temp_file = f.name
+    
+    try:
+        # Apply using kubectl
+        result = subprocess.run(
+            ['kubectl', 'apply', '-f', temp_file],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        logger.info(f"Successfully applied StressChaos: {result.stdout}")
+        
+        # Return a dict similar to what the client would return
+        return {
+            "apiVersion": spec["apiVersion"],
+            "kind": spec["kind"],
+            "metadata": spec["metadata"],
+            "spec": spec["spec"]
+        }
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to apply StressChaos: {e.stderr}")
+        return {
+            "error": f"Failed to apply StressChaos: {e.stderr}",
+            "experiment_name": name,
+            "namespace": namespace,
+            "type": type
+        }
+    finally:
+        # Clean up temp file
+        import os
+        try:
+            os.unlink(temp_file)
+        except:
+            pass
+
+
 def pod_fault(service: str, type: str, namespace: str = "default", **kwargs) -> dict:
     """
     Inject a fault into a pod
@@ -307,7 +397,8 @@ def delete_experiment(type: str, name: str, namespace: str = "default") -> dict:
 def _pod_fault_inject(service: str, type: str, namespace: str = "default", **kwargs) -> dict:
     selector = Selector(
         labelSelectors={"app": service}, 
-        namespaces=[namespace]
+        namespaces=[namespace],
+        pods={}
     )
     kwargs['selector'] = selector
 
@@ -341,6 +432,17 @@ def _fault_inject(type: str, namespace: str = "default", **kwargs) -> dict:
     # 生成唯一的实验名称，确保符合Kubernetes命名规范
     # 将下划线替换为连字符，确保名称符合RFC 1123规范
     experiment_name = f"{type.lower().replace('_', '-')}-{str(uuid.uuid4())[:8]}"
+    
+    # Workaround for StressChaos: chaos-mesh Python client has a bug where it doesn't include
+    # 'value' and 'containerNames' fields in the spec. Use kubectl to apply YAML directly.
+    if type in ["POD_STRESS_CPU", "POD_STRESS_MEMORY"]:
+        logger.info(f"Using kubectl workaround for {type}")
+        return _apply_stress_chaos_via_kubectl(
+            type=type,
+            namespace=namespace,
+            name=experiment_name,
+            **kwargs
+        )
     
     # 添加重试机制
     max_retries = 3
