@@ -324,13 +324,14 @@ def host_disk_fill(address: list[str], duration: str, size: str, path: str, payl
         dict: Disk fault resource.
     """
     return fault_inject.host_disk_fault(
-        type="HOST_FILL",
+        type="HOST_DISK_FILL",
         address=address,
         size=size,
         path=path,
         duration=duration,
         payload_process_num=payload_process_num,
         fill_by_fallocate=fill_by_fallocate,
+        mode="one",
     )
 
 
@@ -356,6 +357,7 @@ def host_read_payload(address: list[str], duration: str, size: str, path: str, p
         path=path,
         duration=duration,
         payload_process_num=payload_process_num,
+        mode="one",
     )
 
 
@@ -381,6 +383,7 @@ def host_write_payload(address: list[str], duration: str, size: str, path: str, 
         path=path,
         duration=duration,
         payload_process_num=payload_process_num,
+        mode="one",
     )
 
 
@@ -645,6 +648,135 @@ def all_services() -> list[dict]:
     with open("services.json", "r") as f:
         data = json.load(f)
     return data
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NetworkChaos – delay / loss / corrupt / duplicate
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def network_delay(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+                  latency: str = "100ms", jitter: str = "0ms", correlation: str = "0",
+                  direction: str = "to", external_targets: list[str] = None,
+                  namespace: str = "default") -> dict:
+    """Inject network delay (latency) into pods. Args: service, duration, mode, value, latency (e.g.'100ms'), jitter, correlation, direction (to/from/both), external_targets, namespace."""
+    return fault_inject.network_delay(service=service, namespace=namespace, duration=duration,
+                                      mode=mode, value=value, latency=latency, jitter=jitter,
+                                      correlation=correlation, direction=direction,
+                                      external_targets=external_targets or [])
+
+
+@mcp.tool()
+def network_loss(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+                 loss: str = "50", correlation: str = "0",
+                 direction: str = "to", external_targets: list[str] = None,
+                 namespace: str = "default") -> dict:
+    """Inject packet loss. Args: service, duration, mode, value, loss (percentage e.g.'50'), correlation, direction, external_targets, namespace."""
+    return fault_inject.network_loss(service=service, namespace=namespace, duration=duration,
+                                     mode=mode, value=value, loss=loss, correlation=correlation,
+                                     direction=direction, external_targets=external_targets or [])
+
+
+@mcp.tool()
+def network_corrupt(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+                    corrupt: str = "50", correlation: str = "0",
+                    direction: str = "to", external_targets: list[str] = None,
+                    namespace: str = "default") -> dict:
+    """Inject packet corruption. Args: service, duration, mode, value, corrupt (percentage), correlation, direction, external_targets, namespace."""
+    return fault_inject.network_corrupt(service=service, namespace=namespace, duration=duration,
+                                        mode=mode, value=value, corrupt=corrupt,
+                                        correlation=correlation, direction=direction,
+                                        external_targets=external_targets or [])
+
+
+@mcp.tool()
+def network_duplicate(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+                      duplicate: str = "50", correlation: str = "0",
+                      direction: str = "to", external_targets: list[str] = None,
+                      namespace: str = "default") -> dict:
+    """Inject packet duplication. Args: service, duration, mode, value, duplicate (percentage), correlation, direction, external_targets, namespace."""
+    return fault_inject.network_duplicate(service=service, namespace=namespace, duration=duration,
+                                          mode=mode, value=value, duplicate=duplicate,
+                                          correlation=correlation, direction=direction,
+                                          external_targets=external_targets or [])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DNSChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def dns_chaos(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+              action: str = "error", scope: str = "outer",
+              patterns: list[str] = None,
+              namespace: str = "default") -> dict:
+    """Simulate DNS failures. action: 'error'(DNS fail)|'random'(random IP). scope: 'outer'|'inner'|'all'. patterns: domain patterns e.g.['*.google.com']."""
+    return fault_inject.dns_chaos(service=service, namespace=namespace, duration=duration,
+                                  mode=mode, value=value, action=action, scope=scope,
+                                  patterns=patterns or [])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HTTPChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def http_chaos(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+               target: str = "Request", port: int = 80,
+               action: str = "delay", delay: str = "1s",
+               replace: dict = None, patch: dict = None,
+               path: str = "*", method: str = None, code: int = None,
+               namespace: str = "default") -> dict:
+    """Simulate HTTP communication faults. action: 'delay'|'abort'|'replace'|'patch'. target: 'Request'|'Response'. port: target port."""
+    return fault_inject.http_chaos(service=service, namespace=namespace, duration=duration,
+                                   mode=mode, value=value, target=target, port=port,
+                                   action=action, delay=delay, replace=replace, patch=patch,
+                                   path=path, method=method, code=code)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IOChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def io_chaos(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+             action: str = "latency", volume_path: str = "/",
+             path: str = "**/*", delay: str = "100ms", errno: int = None,
+             percent: int = 100, container_names: list[str] = None,
+             namespace: str = "default") -> dict:
+    """Simulate file I/O faults. action: 'latency'|'fault'|'attrOverride'|'mistake'. volume_path: mount path. delay: IO delay. errno: error number for fault action."""
+    return fault_inject.io_chaos(service=service, namespace=namespace, duration=duration,
+                                 mode=mode, value=value, action=action, volume_path=volume_path,
+                                 path=path, delay=delay, errno=errno, percent=percent,
+                                 container_names=container_names)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TimeChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def time_chaos(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+               time_offset: str = "-5m", container_names: list[str] = None,
+               namespace: str = "default") -> dict:
+    """Simulate time skew / clock anomalies. time_offset: e.g. '-5m'(5 min behind), '+1h', '100ms'."""
+    return fault_inject.time_chaos(service=service, namespace=namespace, duration=duration,
+                                   mode=mode, value=value, time_offset=time_offset,
+                                   container_names=container_names)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KernelChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def kernel_chaos(service: str, duration: str = "1m", mode: str = "all", value: str = "",
+                 fail_kern_request: dict = None,
+                 namespace: str = "default") -> dict:
+    """Simulate kernel-level faults (e.g. memory allocation failure). fail_kern_request: {"callchain":[{"funcname":"alloc_pages"}],"failtype":0,"probability":1,"times":1}"""
+    return fault_inject.kernel_chaos(service=service, namespace=namespace, duration=duration,
+                                     mode=mode, value=value,
+                                     fail_kern_request=fail_kern_request)
 
 
 def main():

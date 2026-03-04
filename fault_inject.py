@@ -313,29 +313,63 @@ def host_stress_test(type: str, address: list[str], **kwargs) -> dict:
 
 def host_disk_fault(type: str, address: list[str], size: str, path: str, **kwargs) -> dict:
     """
-    Simulate a disk fault on a host
-    Args:
-        type (str): The type of fault to inject, one of "HOST_FILL", "HOST_READ_PAYLOAD", "HOST_WRITE_PAYLOAD".
-            - HOST_FILL: Simulate a disk fill.
-            - HOST_READ_PAYLOAD: Simulate a disk read payload.
-            - HOST_WRITE_PAYLOAD: Simulate a disk write payload.
-        address (list[str]): The addresses of the hosts to inject the fault into.
-        size (str): The size of the payload, e.g., "1024K".
-        path (str): The path to the file to be read or written.
-        kwargs: Additional arguments for the experiment.
-            - payload_process_num (int): The number of processes to read or write the payload.
-            - fill_by_fallocate (bool): Whether to fill the disk by fallocate.
-            - duration (str): The duration of the experiment, e.g., "5m" for 5 minutes.
-    Returns:
-        dict: The applied experiment's resource in Kubernetes.
+    Simulate a disk fault on a host via kubectl apply (workaround for Python client missing mode field).
+    type: HOST_DISK_FILL | HOST_READ_PAYLOAD | HOST_WRITE_PAYLOAD
     """
-    return _fault_inject(
-        type=type,
-        address=address,
-        size=size,
-        path=path,
-        **kwargs
-    )
+    action_map = {
+        "HOST_DISK_FILL": "disk-fill",
+        "HOST_READ_PAYLOAD": "disk-read-payload",
+        "HOST_WRITE_PAYLOAD": "disk-write-payload",
+    }
+    action = action_map.get(type)
+    if action is None:
+        return {"error": f"Invalid type: {type}. Valid: {list(action_map.keys())}"}
+
+    name = _gen_name(type.lower().replace("_", "-"))
+    duration = kwargs.get("duration", "1m")
+    mode = kwargs.get("mode", "one")
+    payload_process_num = kwargs.get("payload_process_num", 1)
+    fill_by_fallocate = kwargs.get("fill_by_fallocate", True)
+
+    spec_action = {}
+    if type == "HOST_DISK_FILL":
+        spec_action = {
+            "disk-fill": {
+                "size": size,
+                "path": path,
+                "fill-by-fallocate": fill_by_fallocate,
+            }
+        }
+    elif type == "HOST_READ_PAYLOAD":
+        spec_action = {
+            "disk-read-payload": {
+                "size": size,
+                "path": path,
+                "payload-process-num": payload_process_num,
+            }
+        }
+    elif type == "HOST_WRITE_PAYLOAD":
+        spec_action = {
+            "disk-write-payload": {
+                "size": size,
+                "path": path,
+                "payload-process-num": payload_process_num,
+            }
+        }
+
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "PhysicalMachineChaos",
+        "metadata": {"name": name, "namespace": "default"},
+        "spec": {
+            "action": action,
+            "mode": mode,
+            "address": address,
+            "duration": duration,
+            **spec_action,
+        }
+    }
+    return _apply_chaos_crd(manifest)
 
 
 def network_fault(service: str, type: str, namespace: str = "default", **kwargs) -> dict:
@@ -472,3 +506,370 @@ def _fault_inject(type: str, namespace: str = "default", **kwargs) -> dict:
                     "namespace": namespace,
                     "type": type
                 }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Generic kubectl-based CRD applier
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _apply_chaos_crd(manifest: dict) -> dict:
+    """Apply any Chaos Mesh CRD manifest via kubectl apply."""
+    import subprocess, tempfile, yaml, os
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(manifest, f)
+        tmp = f.name
+    try:
+        result = subprocess.run(['kubectl', 'apply', '-f', tmp],
+                                capture_output=True, text=True, check=True)
+        logger.info(f"kubectl apply: {result.stdout.strip()}")
+        return {
+            "apiVersion": manifest.get("apiVersion"),
+            "kind": manifest.get("kind"),
+            "metadata": manifest.get("metadata"),
+            "spec": manifest.get("spec"),
+        }
+    except subprocess.CalledProcessError as e:
+        logger.error(f"kubectl apply failed: {e.stderr}")
+        return {"error": e.stderr, "manifest": manifest}
+    finally:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+
+
+def _delete_chaos_crd(kind: str, name: str, namespace: str) -> dict:
+    """Delete a Chaos Mesh CRD resource via kubectl."""
+    import subprocess
+    resource_map = {
+        "NetworkChaos": "networkchaos",
+        "DNSChaos": "dnschaos",
+        "HTTPChaos": "httpchaos",
+        "IOChaos": "iochaos",
+        "TimeChaos": "timechaos",
+        "KernelChaos": "kernelchaos",
+    }
+    crd = resource_map.get(kind, kind.lower())
+    try:
+        result = subprocess.run(
+            ['kubectl', 'delete', crd, name, '-n', namespace, '--ignore-not-found'],
+            capture_output=True, text=True, check=True)
+        return {"status": "deleted", "kind": kind, "name": name, "namespace": namespace}
+    except subprocess.CalledProcessError as e:
+        return {"error": e.stderr}
+
+
+def _gen_name(prefix: str) -> str:
+    return f"{prefix}-{str(uuid.uuid4())[:8]}"
+
+
+def _selector_spec(service: str, namespace: str) -> dict:
+    return {
+        "namespaces": [namespace],
+        "labelSelectors": {"app": service},
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NetworkChaos – delay / loss / corrupt / duplicate
+# ─────────────────────────────────────────────────────────────────────────────
+
+def network_delay(service: str, namespace: str = "default",
+                  duration: str = "1m", mode: str = "all", value: str = "",
+                  latency: str = "100ms", jitter: str = "0ms", correlation: str = "0",
+                  direction: str = "to", external_targets: list = None) -> dict:
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": "delay",
+        "duration": duration,
+        "delay": {"latency": latency, "jitter": jitter, "correlation": correlation},
+        "direction": direction,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if external_targets:
+        spec["externalTargets"] = external_targets
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "NetworkChaos",
+        "metadata": {"name": _gen_name("net-delay"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+def network_loss(service: str, namespace: str = "default",
+                 duration: str = "1m", mode: str = "all", value: str = "",
+                 loss: str = "50", correlation: str = "0",
+                 direction: str = "to", external_targets: list = None) -> dict:
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": "loss",
+        "duration": duration,
+        "loss": {"loss": loss, "correlation": correlation},
+        "direction": direction,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if external_targets:
+        spec["externalTargets"] = external_targets
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "NetworkChaos",
+        "metadata": {"name": _gen_name("net-loss"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+def network_corrupt(service: str, namespace: str = "default",
+                    duration: str = "1m", mode: str = "all", value: str = "",
+                    corrupt: str = "50", correlation: str = "0",
+                    direction: str = "to", external_targets: list = None) -> dict:
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": "corrupt",
+        "duration": duration,
+        "corrupt": {"corrupt": corrupt, "correlation": correlation},
+        "direction": direction,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if external_targets:
+        spec["externalTargets"] = external_targets
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "NetworkChaos",
+        "metadata": {"name": _gen_name("net-corrupt"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+def network_duplicate(service: str, namespace: str = "default",
+                      duration: str = "1m", mode: str = "all", value: str = "",
+                      duplicate: str = "50", correlation: str = "0",
+                      direction: str = "to", external_targets: list = None) -> dict:
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": "duplicate",
+        "duration": duration,
+        "duplicate": {"duplicate": duplicate, "correlation": correlation},
+        "direction": direction,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if external_targets:
+        spec["externalTargets"] = external_targets
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "NetworkChaos",
+        "metadata": {"name": _gen_name("net-dup"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DNSChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def dns_chaos(service: str, namespace: str = "default",
+              duration: str = "1m", mode: str = "all", value: str = "",
+              action: str = "error", scope: str = "outer",
+              patterns: list = None) -> dict:
+    """
+    action: 'error' (DNS解析失败) | 'random' (返回随机IP)
+    scope: 'outer' | 'inner' | 'all'
+    patterns: list of domain patterns, e.g. ["*.google.com", "github.com"]
+    """
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": action,
+        "duration": duration,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if patterns:
+        spec["patterns"] = patterns
+    # Note: scope field not supported by current Chaos Mesh CRD version
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "DNSChaos",
+        "metadata": {"name": _gen_name("dns"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HTTPChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def http_chaos(service: str, namespace: str = "default",
+               duration: str = "1m", mode: str = "all", value: str = "",
+               target: str = "Request", port: int = 80,
+               action: str = "delay",
+               delay: str = "1s",
+               abort: bool = False,
+               replace: dict = None,
+               patch: dict = None,
+               path: str = "*", method: str = None,
+               code: int = None) -> dict:
+    """
+    action: 'delay' | 'abort' | 'replace' | 'patch'
+    target: 'Request' | 'Response'
+    """
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "target": target,
+        "port": port,
+        "duration": duration,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if path and path != "*":
+        spec["path"] = path
+    if method:
+        spec["method"] = method
+    if code:
+        spec["code"] = code
+
+    if action == "delay":
+        spec["delay"] = delay
+    elif action == "abort":
+        spec["abort"] = True
+    elif action == "replace" and replace:
+        spec["replace"] = replace
+    elif action == "patch" and patch:
+        spec["patch"] = patch
+
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "HTTPChaos",
+        "metadata": {"name": _gen_name("http"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IOChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def io_chaos(service: str, namespace: str = "default",
+             duration: str = "1m", mode: str = "all", value: str = "",
+             action: str = "latency",
+             volume_path: str = "/",
+             path: str = "**/*",
+             delay: str = "100ms",
+             errno: int = None,
+             percent: int = 100,
+             container_names: list = None) -> dict:
+    """
+    action: 'latency' | 'fault' | 'attrOverride' | 'mistake'
+    """
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "action": action,
+        "duration": duration,
+        "volumePath": volume_path,
+        "path": path,
+        "percent": percent,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if container_names:
+        spec["containerNames"] = container_names
+    if action == "latency":
+        spec["delay"] = delay
+    elif action == "fault" and errno:
+        spec["errno"] = errno
+
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "IOChaos",
+        "metadata": {"name": _gen_name("io"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TimeChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def time_chaos(service: str, namespace: str = "default",
+               duration: str = "1m", mode: str = "all", value: str = "",
+               time_offset: str = "-5m",
+               container_names: list = None) -> dict:
+    """
+    time_offset: e.g. '+5m30s', '-1h', '100ms'
+    """
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "duration": duration,
+        "timeOffset": time_offset,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+    if container_names:
+        spec["containerNames"] = container_names
+
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "TimeChaos",
+        "metadata": {"name": _gen_name("time"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KernelChaos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def kernel_chaos(service: str, namespace: str = "default",
+                 duration: str = "1m", mode: str = "all", value: str = "",
+                 fail_kern_request: dict = None) -> dict:
+    """
+    fail_kern_request example:
+    {
+        "callchain": [{"funcname": "alloc_pages"}],
+        "failtype": 0,   # 0=slab, 1=page, 2=bio
+        "headers": ["BIO_QUEUE"],
+        "probability": 1,
+        "times": 1
+    }
+    """
+    if fail_kern_request is None:
+        fail_kern_request = {
+            "callchain": [{"funcname": "alloc_pages"}],
+            "failtype": 0,
+            "probability": 1,
+            "times": 1,
+        }
+    spec = {
+        "selector": _selector_spec(service, namespace),
+        "mode": mode,
+        "duration": duration,
+        "failKernRequest": fail_kern_request,
+    }
+    if mode in ("fixed", "fixed-percent", "random-max-percent"):
+        spec["value"] = value
+
+    manifest = {
+        "apiVersion": "chaos-mesh.org/v1alpha1",
+        "kind": "KernelChaos",
+        "metadata": {"name": _gen_name("kernel"), "namespace": namespace},
+        "spec": spec,
+    }
+    return _apply_chaos_crd(manifest)
